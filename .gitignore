@@ -205,3 +205,25 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# --- Data Engineering Specifics ---
+
+# Data Staging (Never commit data!)
+data/
+raw_data/
+*.csv
+*.json
+*.parquet
+*.db
+*.sqlite
+
+# Environment Variables (Never commit passwords!)
+.env
+secrets.json
+
+# Airflow/Logs
+logs/
+airflow.db
+airflow.cfg
+standalone_admin_password.txt
+webserver_config.py
