@@ -1,3 +1,6 @@
+apache-airflow # The orchestrator itself
+apache-airflow-providers-postgres # Allows Airflow to talk to PostgreSQL easily
 requests
 pandas
 python-dotenv
+psycopg2-binary # For the Python scripts inside Airflow to connect to PostgreSQL
