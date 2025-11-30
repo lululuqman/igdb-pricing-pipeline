@@ -3,56 +3,60 @@ services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-airflow}
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
     ports:
       - "5433:5432"
     volumes:
       - ./pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
+      test: ["CMD", "pg_isready", "-U", "airflow"] 
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   airflow-scheduler:
-    image: apache/airflow:2.8.1-python3.11
-    command: scheduler
+    build: .
     restart: always
     environment:
-      &airflow-common
-      AIRFLOW_DB_HOST: postgres
-      AIRFLOW_DB_USER: ${POSTGRES_USER:-postgres}
-      AIRFLOW_DB_PASS: ${POSTGRES_PASSWORD:-postgres}
-      AIRFLOW_DB_NAME: ${POSTGRES_DB:-airflow}
-      AIRFLOW_DB_PORT: 5432
-      AIRFLOW_WEBSERVER_HOST: 0.0.0.0
-      AIRFLOW_LOAD_EXAMPLES: 'false'
+      &airflow-common 
+      AIRFLOW__DATABASE__HOST: postgres
+      AIRFLOW__DATABASE__USER: airflow
+      AIRFLOW__DATABASE__PASSWORD: airflow
+      AIRFLOW__DATABASE__DB: airflow
+      AIRFLOW__DATABASE__PORT: 5432
+      AIRFLOW__WEBSERVER__HOST: 0.0.0.0
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     volumes:
-      - ./dags:/opt/airflow/dags  # Mount your DAGs folder
-      - ./src:/opt/airflow/src    # Mount your SRC folder
-      - ./data:/opt/airflow/data  # Mount your DATA folder
-      - ./requirements.txt:/requirements.txt # Mount dependencies
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+      - ./requirements.txt:/requirements.txt
     depends_on:
       postgres:
         condition: service_healthy
-    # Install Python dependencies at startup
-    user: "${AIRFLOW_UID:-50000}:0"
-    entrypoint: /bin/bash -c "pip install --no-cache-dir -r /requirements.txt && /entrypoint.sh"
+    # We run as root to allow chown and pip install
+    user: root 
+    # FIX: Run chown/pip as root, then switch to 'airflow' user for Airflow init/scheduler
+    entrypoint: /bin/bash -c "chown -R airflow:root /opt/airflow/{dags,src,data} && pip install --no-cache-dir -r /requirements.txt && exec su - airflow -c '/entrypoint.sh && airflow db migrate && airflow users create --username airflow --firstname Airflow --lastname Admin --role Admin --email airflow@example.com || true && exec airflow scheduler'"
+    command: "" 
 
   airflow-webserver:
-    image: apache/airflow:2.8.1-python3.11
-    command: webserver
+    build: .
     restart: always
     ports:
       - "8080:8080"
     depends_on:
-      airflow-scheduler:
-        condition: service_started
+      postgres:
+        condition: service_healthy
     environment:
-      <<: *airflow-common # Inherit common Airflow settings
-    user: "${AIRFLOW_UID:-50000}:0"
+      <<: *airflow-common 
+    # We run as root to allow chown and pip install
+    user: root 
+    # FIX: Run chown/pip as root, then switch to 'airflow' user for the webserver
+    entrypoint: /bin/bash -c "chown -R airflow:root /opt/airflow/{dags,src,data} && pip install --no-cache-dir -r /requirements.txt && exec su - airflow -c '/entrypoint.sh && exec airflow webserver'"
+    command: "" 
     volumes:
       - ./dags:/opt/airflow/dags
       - ./src:/opt/airflow/src
